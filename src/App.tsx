@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useMemo, ReactNode } from 'react';
-import { motion, Reorder, AnimatePresence } from 'motion/react';
+import { motion, Reorder, AnimatePresence, useDragControls } from 'motion/react';
 import { 
   Plus, 
   Copy, 
@@ -37,6 +37,98 @@ import html2canvas from 'html2canvas';
 
 import { INITIAL_UNIVERSITIES } from './constants';
 import { ChoiceItem, UniversityInfo, SubjectInfo } from './types';
+
+// New Row Component to allow useDragControls hook usage
+function ChoiceRow({ 
+  item, 
+  index, 
+  universities, 
+  updateChoice, 
+  removeChoice, 
+  getSubjectOptionsForChoice,
+  universityOptions
+}: {
+  item: ChoiceItem,
+  index: number,
+  universities: UniversityInfo[],
+  updateChoice: (id: string, updates: Partial<ChoiceItem>) => void,
+  removeChoice: (id: string) => void,
+  getSubjectOptionsForChoice: (uniId: string, choiceId: string) => any[],
+  universityOptions: any[]
+}) {
+  const dragControls = useDragControls();
+  const uni = universities.find(u => u.id === item.universityId);
+  const sub = uni?.subjects.find(s => s.id === item.subjectId);
+  const lastPos = sub?.lastPos || '-';
+
+  return (
+    <Reorder.Item 
+      key={item.id} 
+      value={item}
+      dragListener={false}
+      dragControls={dragControls}
+      className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 transition-colors group"
+    >
+      <div 
+        onPointerDown={(e) => dragControls.start(e)}
+        className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1"
+      >
+        <GripVertical size={12} className="opacity-40" />
+        <span>#{(index + 1).toString().padStart(2, '0')}</span>
+      </div>
+
+      <div className="min-w-0">
+        <SearchableSelect 
+          placeholder="Varsity"
+          value={item.universityId}
+          onChange={(val) => updateChoice(item.id, { universityId: val, subjectId: '' })}
+          options={universityOptions}
+          renderOption={(opt) => (
+            <div className="flex flex-col py-0.5">
+              <span className="font-bold text-[11px] leading-tight">{opt.shortVal}</span>
+              <span className="text-[9px] text-slate-400 truncate">{opt.label}</span>
+            </div>
+          )}
+        />
+      </div>
+
+      <div className="min-w-0">
+        <SearchableSelect 
+          placeholder="Choice"
+          value={item.subjectId}
+          disabled={!item.universityId}
+          onChange={(val) => updateChoice(item.id, { subjectId: val })}
+          options={getSubjectOptionsForChoice(item.universityId, item.id)}
+          renderOption={(opt) => (
+            <span className={`text-[11px] leading-tight ${opt.available ? 'font-bold text-slate-700' : 'text-slate-300 line-through italic'}`}>
+              {opt.label}
+            </span>
+          )}
+        />
+      </div>
+
+      <div className="px-1 text-center font-mono text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-100 rounded py-1.5">
+        {lastPos}
+      </div>
+
+      <div className="min-w-0">
+        <textarea 
+          className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] h-[32px] focus:ring-1 focus:ring-emerald-500 outline-none resize-none overflow-hidden"
+          placeholder="..."
+          rows={1}
+          value={item.note}
+          onChange={(e) => updateChoice(item.id, { note: e.target.value })}
+        />
+      </div>
+
+      <div className="flex justify-center">
+        <button onClick={() => removeChoice(item.id)} className="p-1 px-1.5 rounded-full text-slate-200 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+}
 
 // Custom Dropdown
 const SearchableSelect = ({ 
@@ -616,74 +708,18 @@ export default function App() {
                       <p className="text-xs font-black uppercase tracking-[0.3em] text-slate-200">Empty List</p>
                     </div>
                   ) : (
-                    choices.map((item, index) => {
-                      const uni = universities.find(u => u.id === item.universityId);
-                      const sub = uni?.subjects.find(s => s.id === item.subjectId);
-                      const lastPos = sub?.lastPos || '-';
-
-                      return (
-                        <Reorder.Item 
-                          key={item.id} 
-                          value={item}
-                          className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 transition-colors group"
-                        >
-                          <div className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1">
-                            <GripVertical size={12} className="opacity-40" />
-                            <span>#{(index + 1).toString().padStart(2, '0')}</span>
-                          </div>
-
-                          <div className="min-w-0">
-                            <SearchableSelect 
-                              placeholder="Varsity"
-                              value={item.universityId}
-                              onChange={(val) => updateChoice(item.id, { universityId: val, subjectId: '' })}
-                              options={universityOptions}
-                              renderOption={(opt) => (
-                                <div className="flex flex-col py-0.5">
-                                  <span className="font-bold text-[11px] leading-tight">{opt.shortVal}</span>
-                                  <span className="text-[9px] text-slate-400 truncate">{opt.label}</span>
-                                </div>
-                              )}
-                            />
-                          </div>
-
-                          <div className="min-w-0">
-                            <SearchableSelect 
-                              placeholder="Choice"
-                              value={item.subjectId}
-                              disabled={!item.universityId}
-                              onChange={(val) => updateChoice(item.id, { subjectId: val })}
-                              options={getSubjectOptionsForChoice(item.universityId, item.id)}
-                              renderOption={(opt) => (
-                                <span className={`text-[11px] leading-tight ${opt.available ? 'font-bold text-slate-700' : 'text-slate-300 line-through italic'}`}>
-                                  {opt.label}
-                                </span>
-                              )}
-                            />
-                          </div>
-
-                          <div className="px-1 text-center font-mono text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-100 rounded py-1.5">
-                            {lastPos}
-                          </div>
-
-                          <div className="min-w-0">
-                            <textarea 
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] h-[32px] focus:ring-1 focus:ring-emerald-500 outline-none resize-none overflow-hidden"
-                              placeholder="..."
-                              rows={1}
-                              value={item.note}
-                              onChange={(e) => updateChoice(item.id, { note: e.target.value })}
-                            />
-                          </div>
-
-                          <div className="flex justify-center">
-                            <button onClick={() => removeChoice(item.id)} className="p-1 px-1.5 rounded-full text-slate-200 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </Reorder.Item>
-                      );
-                    })
+                    choices.map((item, index) => (
+                      <ChoiceRow 
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        universities={universities}
+                        updateChoice={updateChoice}
+                        removeChoice={removeChoice}
+                        getSubjectOptionsForChoice={getSubjectOptionsForChoice}
+                        universityOptions={universityOptions}
+                      />
+                    ))
                   )}
                 </AnimatePresence>
               </Reorder.Group>
