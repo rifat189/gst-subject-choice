@@ -28,9 +28,11 @@ import {
   ChevronRight,
   Search,
   ClipboardCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 import { INITIAL_UNIVERSITIES } from './constants';
 import { ChoiceItem, UniversityInfo, SubjectInfo } from './types';
@@ -145,7 +147,8 @@ export default function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(['SL', 'University', 'Subject', 'Last Rank', 'Note']);
 
   const listRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -258,27 +261,34 @@ export default function App() {
     }));
   };
 
-  const copyTableToClipboard = async () => {
+  const ALL_COLUMNS = ['SL', 'University', 'Subject', 'Last Rank', 'Note'];
+
+  const performCopyTable = async () => {
     if (choices.length === 0) return;
     
-    // Create header row
-    let tsv = "SL\tUniversity\tSubject\tLast Rank\tNote\n";
+    // Create header row based on selection
+    let tsv = selectedColumns.join('\t') + '\n';
     
     // Create data rows
     choices.forEach((item, index) => {
       const uni = universities.find(u => u.id === item.universityId);
       const sub = uni?.subjects.find(s => s.id === item.subjectId);
-      const uniName = uni ? (uni.shortName || uni.fullName) : '';
-      const subName = sub ? sub.name : '';
-      const lastPos = sub ? sub.lastPos : '-';
-      const note = item.note.replace(/\n/g, ' '); // Flatten notes for one line
       
-      tsv += `${index + 1}\t${uniName}\t${subName}\t${lastPos}\t${note}\n`;
+      const rowData: string[] = [];
+      
+      if (selectedColumns.includes('SL')) rowData.push((index + 1).toString());
+      if (selectedColumns.includes('University')) rowData.push(uni ? (uni.shortName || uni.fullName) : '');
+      if (selectedColumns.includes('Subject')) rowData.push(sub ? sub.name : '');
+      if (selectedColumns.includes('Last Rank')) rowData.push(sub ? sub.lastPos.toString() : '-');
+      if (selectedColumns.includes('Note')) rowData.push(item.note.replace(/\n/g, ' '));
+      
+      tsv += rowData.join('\t') + '\n';
     });
 
     try {
       await navigator.clipboard.writeText(tsv);
       setCopied(true);
+      setShowCopyModal(false);
       setShowDownloadMenu(false);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -286,45 +296,36 @@ export default function App() {
     }
   };
 
-  // Fixed Image Download
-  const downloadImage = async () => {
+  const downloadPDF = async () => {
     if (!listRef.current) return;
     setIsExporting(true);
     setShowDownloadMenu(false);
     
     try {
-      // Small delay to ensure menu is closed and layout is stable
       await new Promise(r => setTimeout(r, 400));
       
       const element = listRef.current;
-      
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff',
-        onclone: (clonedDoc) => {
-          const headers = clonedDoc.querySelector('[data-capture-headers]') as HTMLElement;
-          if (headers) {
-            headers.style.position = 'relative';
-            headers.style.top = '0';
-          }
-          
-          // Ensure all captured elements are visible and not transformed by motion in a way that breaks capture
-          const reorderGroup = clonedDoc.querySelector('.divide-y') as HTMLElement;
-          if (reorderGroup) {
-            reorderGroup.style.transform = 'none';
-          }
-        }
+        backgroundColor: '#ffffff'
       });
       
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      setCapturedImage(imgData);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+      });
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(`ChoiceList_${Date.now()}.pdf`);
       
     } catch (error) {
-      console.error("Export Error:", error);
-      alert("Capture failed. Try the 'Copy Table' or 'Share Link' instead.");
+      console.error("PDF Export Error:", error);
+      alert("PDF generation failed. Try 'Copy Table' instead.");
     } finally {
       setIsExporting(false);
     }
@@ -429,15 +430,18 @@ export default function App() {
                   className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[60] py-1"
                 >
                   <button 
-                    onClick={downloadImage}
+                    onClick={downloadPDF}
                     disabled={isExporting}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase text-slate-600 hover:bg-slate-50 transition-colors"
                   >
-                    <ImageIcon size={14} className="text-emerald-500" />
-                    <span>{isExporting ? 'Capturing...' : 'PNG Image'}</span>
+                    <FileText size={14} className="text-emerald-500" />
+                    <span>{isExporting ? 'Generating...' : 'PDF Document'}</span>
                   </button>
                   <button 
-                    onClick={copyTableToClipboard}
+                    onClick={() => {
+                       setShowCopyModal(true);
+                       setShowDownloadMenu(false);
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50"
                   >
                     <FileSpreadsheet size={14} className="text-emerald-500" />
@@ -939,66 +943,71 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Capture Preview Modal */}
+      {/* Column Selection Modal for Copy */}
       <AnimatePresence>
-        {capturedImage && (
+        {showCopyModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4"
+            className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
           >
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl shadow-3xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-800"
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-slate-200"
             >
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><ImageIcon size={18} /></div>
-                  <div>
-                    <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Image Preview (Ready to Share)</h2>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Long press or right-click to save if download fails</p>
-                  </div>
-                </div>
-                <button onClick={() => setCapturedImage(null)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                  <X size={20} className="text-slate-500" />
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Select Columns to Copy</h3>
+                <button onClick={() => setShowCopyModal(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={18} />
                 </button>
               </div>
-              
-              <div className="flex-1 overflow-auto bg-slate-100 p-4 sm:p-8 flex items-start justify-center">
-                <img 
-                  src={capturedImage} 
-                  alt="Choice List Capture" 
-                  className="max-w-full shadow-2xl rounded-lg bg-white"
-                  crossOrigin="anonymous"
-                />
+
+              <div className="space-y-2 mb-6">
+                <label className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer border border-transparent hover:border-slate-100 transition-all">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                    checked={selectedColumns.length === ALL_COLUMNS.length}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedColumns(ALL_COLUMNS);
+                      else setSelectedColumns([]);
+                    }}
+                  />
+                  <span className="text-xs font-black uppercase text-slate-900">Select All</span>
+                </label>
+                <div className="h-px bg-slate-100 my-2" />
+                {ALL_COLUMNS.map(col => (
+                  <label key={col} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                      checked={selectedColumns.includes(col)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedColumns([...selectedColumns, col]);
+                        else setSelectedColumns(selectedColumns.filter(c => c !== col));
+                      }}
+                    />
+                    <span className="text-xs font-bold text-slate-700">{col}</span>
+                  </label>
+                ))}
               </div>
 
-              <div className="p-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row justify-between gap-4 shrink-0">
-                <div className="flex items-center gap-2 order-2 sm:order-1">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                   <span className="text-[10px] font-black uppercase text-slate-400">High Quality PNG Generated</span>
-                </div>
-                <div className="flex gap-2 order-1 sm:order-2">
-                  <button 
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.download = `ChoiceList_${Date.now()}.png`;
-                      link.href = capturedImage;
-                      link.click();
-                    }}
-                    className="flex-1 sm:flex-initial px-8 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.1em] hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Download size={16} /> Download
-                  </button>
-                </div>
-              </div>
+              <button 
+                onClick={performCopyTable}
+                disabled={selectedColumns.length === 0}
+                className="w-full py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-[0.1em] hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2"
+              >
+                <ClipboardCheck size={16} /> Copy Table
+              </button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Capture Preview Modal Removed - PDFs download directly */}
     </div>
   );
 }
