@@ -29,10 +29,9 @@ import {
   Search,
   ClipboardCheck,
   FileSpreadsheet,
-  FileText
+  FileCode
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 import { INITIAL_UNIVERSITIES } from './constants';
 import { ChoiceItem, UniversityInfo, SubjectInfo } from './types';
@@ -55,7 +54,23 @@ const SearchableSelect = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const checkDirection = () => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      // If less than 200px below, and more space above, open upward
+      setOpenUpward(spaceBelow < 200 && rect.top > spaceBelow);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      checkDirection();
+    }
+  }, [isOpen]);
 
   const filteredOptions = useMemo(() => {
     return options.filter(opt => 
@@ -91,7 +106,7 @@ const SearchableSelect = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl max-h-48 overflow-y-auto ring-1 ring-black/5">
+        <div className={`absolute z-50 w-full bg-white border border-slate-200 rounded shadow-xl max-h-48 overflow-y-auto ring-1 ring-black/5 ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="sticky top-0 bg-slate-50 border-b border-slate-100 p-1">
             <div className="relative">
               <input 
@@ -148,6 +163,7 @@ export default function App() {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyFormat, setCopyFormat] = useState<'TSV' | 'ASCII'>('TSV');
   const [selectedColumns, setSelectedColumns] = useState<string[]>(['SL', 'University', 'Subject', 'Last Rank', 'Note']);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -266,68 +282,90 @@ export default function App() {
   const performCopyTable = async () => {
     if (choices.length === 0) return;
     
-    // Create header row based on selection
-    let tsv = selectedColumns.join('\t') + '\n';
-    
-    // Create data rows
+    // Prepare rows
+    const rows: string[][] = [];
     choices.forEach((item, index) => {
       const uni = universities.find(u => u.id === item.universityId);
       const sub = uni?.subjects.find(s => s.id === item.subjectId);
       
       const rowData: string[] = [];
-      
       if (selectedColumns.includes('SL')) rowData.push((index + 1).toString());
       if (selectedColumns.includes('University')) rowData.push(uni ? (uni.shortName || uni.fullName) : '');
       if (selectedColumns.includes('Subject')) rowData.push(sub ? sub.name : '');
       if (selectedColumns.includes('Last Rank')) rowData.push(sub ? sub.lastPos.toString() : '-');
       if (selectedColumns.includes('Note')) rowData.push(item.note.replace(/\n/g, ' '));
       
-      tsv += rowData.join('\t') + '\n';
+      rows.push(rowData);
     });
 
+    let content = "";
+    if (copyFormat === 'TSV') {
+      content = selectedColumns.join('\t') + '\n';
+      content += rows.map(r => r.join('\t')).join('\n');
+    } else {
+      // ASCII Table logic - Strict requirements
+      // Max Width: 48 (safe under 50)
+      // Borders use: +, -, |
+      const N = selectedColumns.length;
+      const borderCharsCount = 3 * N + 1; // | cell | cell | -> 3 chars per cell + 1 ending |
+      const totalAvailableWidth = 47 - borderCharsCount; 
+      
+      // Assign tentative max widths based on column importance
+      const maxColWidths = selectedColumns.map(col => {
+        if (col === 'SL') return 3;
+        if (col === 'Last Rank') return 5;
+        if (col === 'University') return 10;
+        if (col === 'Subject') return 12;
+        if (col === 'Note') return 10;
+        return 8;
+      });
+
+      // Distribute remaining width if any
+      const currentTotal = maxColWidths.reduce((a, b) => a + b, 0);
+      const diff = totalAvailableWidth - currentTotal;
+      if (diff > 0 && selectedColumns.includes('Subject')) {
+        const subIndex = selectedColumns.indexOf('Subject');
+        maxColWidths[subIndex] += diff;
+      }
+
+      const truncate = (val: string, max: number) => {
+        const s = val.toString();
+        if (s.length <= max) return s;
+        return s.substring(0, max - 1) + '.'; // dots are standard ASCII
+      };
+
+      const truncatedRows = rows.map(row => 
+        row.map((cell, i) => truncate(cell, maxColWidths[i]))
+      );
+      const truncatedHeaders = selectedColumns.map((col, i) => truncate(col, maxColWidths[i]));
+
+      const colWidths = truncatedHeaders.map((col, i) => 
+        Math.max(col.length, ...truncatedRows.map(row => row[i]?.length || 0))
+      );
+
+      const createDivider = () => '+' + colWidths.map(w => '-'.repeat(w + 2)).join('+') + '+';
+      const formatRow = (r: string[]) => '| ' + r.map((cell, i) => cell.toString().padEnd(colWidths[i])).join(' | ') + ' |';
+      
+      let table = "```\n";
+      table += createDivider() + '\n';
+      table += formatRow(truncatedHeaders) + '\n';
+      table += createDivider() + '\n';
+      truncatedRows.forEach(row => {
+        table += formatRow(row) + '\n';
+      });
+      table += createDivider() + '\n';
+      table += "```";
+      content = table;
+    }
+
     try {
-      await navigator.clipboard.writeText(tsv);
+      await navigator.clipboard.writeText(content);
       setCopied(true);
       setShowCopyModal(false);
       setShowDownloadMenu(false);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy: ', err);
-    }
-  };
-
-  const downloadPDF = async () => {
-    if (!listRef.current) return;
-    setIsExporting(true);
-    setShowDownloadMenu(false);
-    
-    try {
-      await new Promise(r => setTimeout(r, 400));
-      
-      const element = listRef.current;
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff'
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`ChoiceList_${Date.now()}.pdf`);
-      
-    } catch (error) {
-      console.error("PDF Export Error:", error);
-      alert("PDF generation failed. Try 'Copy Table' instead.");
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -399,9 +437,9 @@ export default function App() {
   const selectedUniversity = useMemo(() => universities.find(u => u.id === selectedUniId), [universities, selectedUniId]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans overflow-x-hidden relative">
+    <div className="h-screen bg-slate-50 text-slate-900 flex flex-col font-sans overflow-hidden relative">
       
-      {/* Header - STICKY TOP */}
+      {/* Header - FIXED TOP */}
       <header className="bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shrink-0 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-slate-900 rounded-lg flex items-center justify-center text-white shadow-lg">
@@ -430,15 +468,19 @@ export default function App() {
                   className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[60] py-1"
                 >
                   <button 
-                    onClick={downloadPDF}
-                    disabled={isExporting}
+                    onClick={() => {
+                       setCopyFormat('ASCII');
+                       setShowCopyModal(true);
+                       setShowDownloadMenu(false);
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[11px] font-black uppercase text-slate-600 hover:bg-slate-50 transition-colors"
                   >
-                    <FileText size={14} className="text-emerald-500" />
-                    <span>{isExporting ? 'Generating...' : 'PDF Document'}</span>
+                    <FileCode size={14} className="text-emerald-500" />
+                    <span>Copy Table (ASCII)</span>
                   </button>
                   <button 
                     onClick={() => {
+                       setCopyFormat('TSV');
                        setShowCopyModal(true);
                        setShowDownloadMenu(false);
                     }}
@@ -472,12 +514,6 @@ export default function App() {
             className="p-1.5 px-2 md:px-3 flex items-center gap-2 border border-slate-200 rounded-md bg-white text-[11px] font-black uppercase text-slate-600 hover:bg-slate-50 transition-colors"
           >
             <Settings size={14} /> <span className="hidden md:inline">Manage Varsities</span>
-          </button>
-          <button 
-            onClick={addChoice}
-            className="px-4 py-1.5 bg-slate-900 text-white rounded-md text-[11px] font-black uppercase hover:bg-black shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
-          >
-            <Plus size={14} /> <span className="hidden sm:inline">Add Row</span>
           </button>
         </div>
       </header>
@@ -530,8 +566,9 @@ export default function App() {
                           value={item}
                           className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 transition-colors group"
                         >
-                          <div className="flex justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors">
-                            #{(index + 1).toString().padStart(2, '0')}
+                          <div className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1">
+                            <GripVertical size={12} className="opacity-40" />
+                            <span>#{(index + 1).toString().padStart(2, '0')}</span>
                           </div>
 
                           <div className="min-w-0">
@@ -591,17 +628,28 @@ export default function App() {
               </Reorder.Group>
             </div>
           </div>
-
-          <div className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2">
-            <button onClick={addChoice} className="flex-1 py-2 border border-slate-200 rounded bg-white text-slate-500 text-[10px] font-black uppercase tracking-widest hover:border-slate-400 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95">
-              <Plus size={14} /> New Row
-            </button>
-            <button onClick={copyLatest} className="flex-1 py-1.5 border border-slate-200 rounded bg-white text-slate-500 text-[10px] font-black uppercase tracking-widest hover:border-slate-400 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95">
-              <Copy size={14} /> Copy Previous
-            </button>
-          </div>
         </div>
       </main>
+
+      {/* Floating Action Hub */}
+      <div className="fixed bottom-12 right-6 z-[60] flex md:flex-col flex-row-reverse items-end md:items-center gap-3 pointer-events-none">
+        <button 
+          onClick={addChoice} 
+          className="pointer-events-auto h-12 w-12 md:w-auto md:px-6 bg-slate-900 border border-slate-800 rounded-full text-white text-[10px] font-black uppercase tracking-[0.2em] hover:bg-emerald-600 transition-all flex items-center justify-center md:gap-3 shadow-xl active:scale-95"
+          title="Add New Row"
+        >
+          <Plus size={20} />
+          <span className="hidden md:inline">New Row</span>
+        </button>
+        <button 
+          onClick={copyLatest} 
+          className="pointer-events-auto h-10 w-10 md:w-auto md:px-4 bg-white border border-slate-200 rounded-full text-slate-600 text-[10px] font-black uppercase tracking-widest hover:border-emerald-300 hover:text-emerald-600 transition-all flex items-center justify-center md:gap-2 shadow-lg active:scale-95"
+          title="Copy Previous Row"
+        >
+          <Copy size={18} className="text-emerald-500" />
+          <span className="hidden md:inline">Copy Previous</span>
+        </button>
+      </div>
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 px-6 py-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">
@@ -959,7 +1007,7 @@ export default function App() {
               className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-slate-200"
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Select Columns to Copy</h3>
+                <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Copy as {copyFormat}</h3>
                 <button onClick={() => setShowCopyModal(false)} className="text-slate-400 hover:text-slate-600">
                   <X size={18} />
                 </button>
