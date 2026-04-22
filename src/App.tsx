@@ -67,11 +67,29 @@ function ChoiceRow({
       value={item}
       dragListener={false}
       dragControls={dragControls}
-      className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 transition-colors group"
+      initial={false}
+      animate={{ 
+        scale: 1, 
+        backgroundColor: 'rgb(255 255 255)', 
+        boxShadow: '0 0px 0px 0px rgba(0, 0, 0, 0)',
+        zIndex: 1
+      }}
+      whileDrag={{ 
+        scale: 1.02,
+        backgroundColor: 'rgb(248 250 252)', // slate-50
+        boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+        zIndex: 100
+      }}
+      transition={{ duration: 0.2 }}
+      className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white border-y border-transparent transition-colors group select-none relative"
     >
       <div 
-        onPointerDown={(e) => dragControls.start(e)}
-        className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1"
+        onPointerDown={(e) => {
+          dragControls.start(e);
+          // Prevent text selection during drag
+          if (e.cancelable) e.preventDefault();
+        }}
+        className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1 touch-none select-none"
       >
         <GripVertical size={12} className="opacity-40" />
         <span>#{(index + 1).toString().padStart(2, '0')}</span>
