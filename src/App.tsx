@@ -29,7 +29,9 @@ import {
   Search,
   ClipboardCheck,
   FileSpreadsheet,
-  FileCode
+  FileCode,
+  FileText,
+  Layers
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
@@ -164,6 +166,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyFormat, setCopyFormat] = useState<'TSV' | 'ASCII'>('TSV');
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateSelectedUniIds, setTemplateSelectedUniIds] = useState<string[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<string[]>(['SL', 'University', 'Subject', 'Last Rank', 'Note']);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -278,6 +282,51 @@ export default function App() {
   };
 
   const ALL_COLUMNS = ['SL', 'University', 'Subject', 'Last Rank', 'Note'];
+
+  const applyTemplate = () => {
+    const allItems: ChoiceItem[] = [];
+    
+    // Only use selected universities
+    const selectedUnis = universities.filter(u => templateSelectedUniIds.includes(u.id));
+
+    selectedUnis.forEach(uni => {
+      uni.subjects.forEach(sub => {
+        allItems.push({
+          id: Math.random().toString(36).substr(2, 9),
+          universityId: uni.id,
+          subjectId: sub.id,
+          note: ''
+        });
+      });
+    });
+
+    const parseRank = (val: string | number | undefined) => {
+      if (val === undefined || val === null) return 999999;
+      if (typeof val === 'number') return val;
+      // Extract first sequence of digits
+      const match = val.toString().match(/\d+/);
+      if (!match) return 999999;
+      return parseInt(match[0], 10);
+    };
+
+    // Sort ascending by lastPos (Best rank first)
+    allItems.sort((a, b) => {
+      const uA = universities.find(u => u.id === a.universityId);
+      const sA = uA?.subjects.find(s => s.id === a.subjectId);
+      const uB = universities.find(u => u.id === b.universityId);
+      const sB = uB?.subjects.find(s => s.id === b.subjectId);
+      
+      const rankA = parseRank(sA?.lastPos);
+      const rankB = parseRank(sB?.lastPos);
+      
+      if (rankA !== rankB) return rankA - rankB;
+      // Secondary sort by name if ranks are identical
+      return (sA?.name || '').localeCompare(sB?.name || '');
+    });
+
+    setChoices(allItems);
+    setShowTemplateModal(false);
+  };
 
   const performCopyTable = async () => {
     if (choices.length === 0) return;
@@ -448,6 +497,18 @@ export default function App() {
           <h1 className="text-lg font-black tracking-tight text-slate-800 uppercase">Choice Maker</h1>
         </div>
         <div className="flex items-center gap-1.5 md:gap-3">
+          <button 
+            onClick={() => {
+              setTemplateSelectedUniIds(universities.map(u => u.id));
+              setShowTemplateModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 rounded-md bg-white text-[11px] font-black uppercase text-slate-600 hover:border-emerald-200 hover:text-emerald-600 hover:bg-emerald-50 transition-all active:scale-95 group shadow-sm"
+            title="Import Subjects by Selected Varsities"
+          >
+            <FileText size={14} className="group-hover:text-emerald-500" /> 
+            <span className="hidden md:inline">Template</span>
+          </button>
+
           <div className="relative" ref={downloadMenuRef}>
             <button 
               onClick={() => setShowDownloadMenu(!showDownloadMenu)}
@@ -985,6 +1046,83 @@ export default function App() {
                   <button onClick={() => setShowRestoreConfirm(true)} className="px-5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 uppercase tracking-tighter transition-colors">Restore Defaults</button>
                 </div>
                 <button onClick={() => setShowManageModal(false)} className="px-12 py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] hover:bg-black active:scale-95 transition-all">Close Editor</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* University Selection Modal for Template */}
+      <AnimatePresence>
+        {showTemplateModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col max-h-[85vh]"
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-800 tracking-tight">Select Varsities for Template</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Subjects will be added by historical rank</p>
+                </div>
+                <button onClick={() => setShowTemplateModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                    checked={templateSelectedUniIds.length === universities.length}
+                    onChange={(e) => {
+                      if (e.target.checked) setTemplateSelectedUniIds(universities.map(u => u.id));
+                      else setTemplateSelectedUniIds([]);
+                    }}
+                  />
+                  <span className="text-[11px] font-black uppercase text-slate-600 group-hover:text-emerald-600 transition-colors">Select All Universities</span>
+                </label>
+                <span className="text-[10px] font-black text-slate-300 uppercase">{templateSelectedUniIds.length}/{universities.length} Selected</span>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-1">
+                {universities.map(uni => (
+                  <label key={uni.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${templateSelectedUniIds.includes(uni.id) ? 'bg-emerald-50 border-emerald-100 shadow-sm' : 'bg-white border-transparent hover:border-slate-200 text-slate-500'}`}>
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                        checked={templateSelectedUniIds.includes(uni.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) setTemplateSelectedUniIds([...templateSelectedUniIds, uni.id]);
+                          else setTemplateSelectedUniIds(templateSelectedUniIds.filter(id => id !== uni.id));
+                        }}
+                      />
+                      <div className="flex flex-col">
+                        <span className={`text-xs font-bold leading-tight ${templateSelectedUniIds.includes(uni.id) ? 'text-emerald-900' : 'text-slate-700'}`}>{uni.fullName}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-0.5">{uni.subjects.length} Subjects Available</span>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="p-6 border-t border-slate-100 bg-white shrink-0">
+                <button 
+                  onClick={applyTemplate}
+                  disabled={templateSelectedUniIds.length === 0}
+                  className="w-full py-4 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.2em] hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
+                >
+                  <PlusCircle size={18} /> Confirm & Import Template
+                </button>
               </div>
             </motion.div>
           </motion.div>
