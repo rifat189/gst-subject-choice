@@ -38,6 +38,17 @@ import html2canvas from 'html2canvas';
 import { INITIAL_UNIVERSITIES } from './constants';
 import { ChoiceItem, UniversityInfo, SubjectInfo } from './types';
 
+interface ChoiceRowProps {
+  key?: string | number; // Added to satisfy TS when used in map
+  item: ChoiceItem;
+  index: number;
+  universities: UniversityInfo[];
+  updateChoice: (id: string, updates: Partial<ChoiceItem>) => void;
+  removeChoice: (id: string) => void;
+  getSubjectOptionsForChoice: (uniId: string, choiceId: string) => any[];
+  universityOptions: any[];
+}
+
 // New Row Component to allow useDragControls hook usage
 function ChoiceRow({ 
   item, 
@@ -47,15 +58,7 @@ function ChoiceRow({
   removeChoice, 
   getSubjectOptionsForChoice,
   universityOptions
-}: {
-  item: ChoiceItem,
-  index: number,
-  universities: UniversityInfo[],
-  updateChoice: (id: string, updates: Partial<ChoiceItem>) => void,
-  removeChoice: (id: string) => void,
-  getSubjectOptionsForChoice: (uniId: string, choiceId: string) => any[],
-  universityOptions: any[]
-}) {
+}: ChoiceRowProps) {
   const dragControls = useDragControls();
   const uni = universities.find(u => u.id === item.universityId);
   const sub = uni?.subjects.find(s => s.id === item.subjectId);
@@ -140,7 +143,7 @@ function ChoiceRow({
       </div>
 
       <div className="flex justify-center">
-        <button onClick={() => removeChoice(item.id)} className="p-1 px-1.5 rounded-full text-slate-200 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
+        <button onClick={() => removeChoice(item.id)} className="p-1 px-1.5 rounded-full text-slate-300 md:text-slate-200 hover:text-red-500 hover:bg-red-50 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100">
           <Trash2 size={13} />
         </button>
       </div>
@@ -308,8 +311,23 @@ export default function App() {
     const savedUnis = localStorage.getItem('gst_universities_data');
     if (savedUnis) {
       try {
-        const parsed = JSON.parse(savedUnis);
+        let parsed = JSON.parse(savedUnis);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Data Migration/Repair: Fix the 'pstu' vs 'prstu' conflict if it exists in saved data
+          const pirojpur = parsed.find((u: any) => u.fullName.toLowerCase().includes('pirojpur'));
+          if (pirojpur && pirojpur.id === 'pstu') {
+            pirojpur.id = 'prstu';
+            pirojpur.shortName = 'PrSTU';
+            // Also update choices pointing to the old ID
+            const savedChoices = localStorage.getItem('gst_choice_list');
+            if (savedChoices) {
+              const cParsed = JSON.parse(savedChoices);
+              const cFixed = cParsed.map((c: any) => c.universityId === 'pstu' && pirojpur.fullName.includes(c.universityId) ? {...c, universityId: 'prstu'} : c);
+              localStorage.setItem('gst_choice_list', JSON.stringify(cFixed));
+              setChoices(cFixed);
+            }
+          }
+          
           setUniversities(parsed);
           setSelectedUniId(parsed[0].id);
           return;
@@ -380,12 +398,18 @@ export default function App() {
   const getSubjectOptionsForChoice = (uniId: string, currentChoiceId: string) => {
     const uni = universities.find(u => u.id === uniId);
     if (!uni) return [];
-    const usedIds = choices.filter(c => c.id !== currentChoiceId && c.universityId === uniId).map(c => c.subjectId);
-    return uni.subjects.map(sub => ({
-      key: sub.id,
-      label: sub.name,
-      available: !usedIds.includes(sub.id)
-    }));
+    // Only show subjects NOT already used in other rows for THIS university
+    const usedIds = choices
+      .filter(c => c.id !== currentChoiceId && c.universityId === uniId && c.subjectId)
+      .map(c => c.subjectId);
+    
+    return uni.subjects
+      .filter(sub => !usedIds.includes(sub.id))
+      .map(sub => ({
+        key: sub.id,
+        label: sub.name,
+        available: true
+      }));
   };
 
   const ALL_COLUMNS = ['SL', 'University', 'Subject', 'Last Rank', 'Note'];
@@ -436,11 +460,13 @@ export default function App() {
   };
 
   const performCopyTable = async () => {
-    if (choices.length === 0) return;
+    // Only export valid rows (must have university and subject)
+    const validChoices = choices.filter(c => c.universityId && c.subjectId);
+    if (validChoices.length === 0) return;
     
     // Prepare rows
     const rows: string[][] = [];
-    choices.forEach((item, index) => {
+    validChoices.forEach((item, index) => {
       const uni = universities.find(u => u.id === item.universityId);
       const sub = uni?.subjects.find(s => s.id === item.subjectId);
       
