@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, useEffect, useMemo, ReactNode } from 'react';
+import React, { useState, useRef, useEffect, useMemo, ReactNode } from 'react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'motion/react';
 import { 
   Plus, 
@@ -47,6 +47,7 @@ interface ChoiceRowProps {
   removeChoice: (id: string) => void;
   getSubjectOptionsForChoice: (uniId: string, choiceId: string) => any[];
   universityOptions: any[];
+  isScrolled: boolean;
 }
 
 // New Row Component to allow useDragControls hook usage
@@ -57,7 +58,8 @@ function ChoiceRow({
   updateChoice, 
   removeChoice, 
   getSubjectOptionsForChoice,
-  universityOptions
+  universityOptions,
+  isScrolled
 }: ChoiceRowProps) {
   const dragControls = useDragControls();
   const uni = universities.find(u => u.id === item.universityId);
@@ -84,7 +86,7 @@ function ChoiceRow({
         zIndex: 100
       }}
       transition={{ duration: 0.2 }}
-      className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] items-center gap-2 px-4 py-1.5 bg-white border-y border-transparent transition-colors group select-none relative"
+      className="grid grid-cols-[44px_130px_1fr_90px_180px_40px] gap-2 px-0 py-0 bg-white border-b border-slate-100 transition-colors group select-none relative"
     >
       <div 
         onPointerDown={(e) => {
@@ -92,13 +94,13 @@ function ChoiceRow({
           // Prevent text selection during drag
           if (e.cancelable) e.preventDefault();
         }}
-        className="flex items-center gap-1 justify-center text-[11px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-colors px-1 touch-none select-none"
+        className={`sticky left-0 bg-white z-20 flex items-center justify-center text-[10px] font-black text-slate-300 cursor-grab active:cursor-grabbing group-hover:text-emerald-600 transition-all px-1 touch-none select-none border-r border-slate-100 h-12 ${isScrolled ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)]' : ''}`}
       >
-        <GripVertical size={12} className="opacity-40" />
-        <span>#{(index + 1).toString().padStart(2, '0')}</span>
+        <GripVertical size={12} className="opacity-30 flex-shrink-0" />
+        <span className="flex-shrink-0">{(index + 1).toString().padStart(2, '0')}</span>
       </div>
 
-      <div className="min-w-0">
+      <div className="flex items-center min-w-0 py-2">
         <SearchableSelect 
           placeholder="Varsity"
           value={item.universityId}
@@ -113,7 +115,7 @@ function ChoiceRow({
         />
       </div>
 
-      <div className="min-w-0">
+      <div className="flex items-center min-w-0 py-2">
         <SearchableSelect 
           placeholder="Choice"
           value={item.subjectId}
@@ -128,11 +130,13 @@ function ChoiceRow({
         />
       </div>
 
-      <div className="px-1 text-center font-mono text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-100 rounded py-1.5">
-        {lastPos}
+      <div className="flex items-center justify-center py-2 px-1">
+        <div className="w-full text-center font-mono text-[10px] font-black text-slate-500 bg-slate-50 border border-slate-100 rounded py-1.5">
+          {lastPos}
+        </div>
       </div>
 
-      <div className="min-w-0">
+      <div className="flex items-center min-w-0 py-2">
         <textarea 
           className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] h-[32px] focus:ring-1 focus:ring-emerald-500 outline-none resize-none overflow-hidden"
           placeholder="..."
@@ -142,7 +146,7 @@ function ChoiceRow({
         />
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex items-center justify-center py-2">
         <button onClick={() => removeChoice(item.id)} className="p-1 px-1.5 rounded-full text-slate-300 md:text-slate-200 hover:text-red-500 hover:bg-red-50 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100">
           <Trash2 size={13} />
         </button>
@@ -282,9 +286,15 @@ export default function App() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [templateSelectedUniIds, setTemplateSelectedUniIds] = useState<string[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<string[]>(['SL', 'University', 'Subject', 'Last Rank', 'Note']);
+  const [isTableScrolled, setIsTableScrolled] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setIsTableScrolled(e.currentTarget.scrollLeft > 0);
+  };
 
   // Close menus on outside click
   useEffect(() => {
@@ -736,16 +746,16 @@ export default function App() {
             </div>
           </div>
 
-          <div data-capture-container className="flex-1 overflow-auto relative">
+          <div data-capture-container className="flex-1 overflow-auto relative" ref={scrollContainerRef} onScroll={handleScroll}>
             <div ref={listRef} data-capture-target className="min-w-[700px] md:min-w-full inline-block align-middle md:block bg-white">
               {/* Sticky Headers for the table */}
-              <div data-capture-headers className="grid grid-cols-[40px_130px_1fr_90px_180px_40px] gap-2 px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-500 sticky top-0 z-30">
-                <div className="flex justify-center">SL</div>
-                <div className="pl-1">University</div>
-                <div>Subject Opportunity</div>
-                <div className="text-center">Last Rank</div>
-                <div>Notes</div>
-                <div className="flex justify-center">Rem</div>
+              <div data-capture-headers className="grid grid-cols-[44px_130px_1fr_90px_180px_40px] gap-2 px-0 py-0 bg-white md:bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-slate-500 sticky top-0 z-30">
+                <div className={`sticky left-0 bg-white md:bg-slate-50 z-40 flex items-center justify-center border-r border-slate-100 transition-all h-10 ${isTableScrolled ? 'shadow-[2px_0_4px_rgba(0,0,0,0.05)]' : ''}`}>SL</div>
+                <div className="pl-3 flex items-center">University</div>
+                <div className="flex items-center">Subject Opportunity</div>
+                <div className="text-center flex items-center justify-center">Last Rank</div>
+                <div className="flex items-center">Notes</div>
+                <div className="flex items-center justify-center">Rem</div>
               </div>
 
               {/* Rows */}
@@ -767,6 +777,7 @@ export default function App() {
                         removeChoice={removeChoice}
                         getSubjectOptionsForChoice={getSubjectOptionsForChoice}
                         universityOptions={universityOptions}
+                        isScrolled={isTableScrolled}
                       />
                     ))
                   )}
