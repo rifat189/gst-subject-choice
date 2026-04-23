@@ -6,7 +6,7 @@
 export interface SubjectInfo {
   id: string;
   name: string;
-  lastPos: string | number;
+  lastPos: string | number | null;
 }
 
 export interface UniversityInfo {

@@ -307,23 +307,10 @@ export default function App() {
 
     const savedUnis = localStorage.getItem('gst_universities_data');
     if (savedUnis) {
-      try {
-        const parsed = JSON.parse(savedUnis);
-        if (Array.isArray(parsed)) {
-          setUniversities(parsed);
-          if (parsed.length > 0) setSelectedUniId(parsed[0].id);
-        } else {
-          setUniversities(INITIAL_UNIVERSITIES);
-          setSelectedUniId(INITIAL_UNIVERSITIES[0].id);
-        }
-      } catch (e) {
-        setUniversities(INITIAL_UNIVERSITIES);
-        setSelectedUniId(INITIAL_UNIVERSITIES[0].id);
-      }
-    } else {
-      setUniversities(INITIAL_UNIVERSITIES);
-      setSelectedUniId(INITIAL_UNIVERSITIES[0].id);
+      localStorage.removeItem('gst_universities_data');
     }
+    setUniversities(INITIAL_UNIVERSITIES);
+    setSelectedUniId(INITIAL_UNIVERSITIES[0].id);
   }, []);
 
   // Selection repair check: ensure selectedUniId always points to an existing university
