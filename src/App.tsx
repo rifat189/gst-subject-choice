@@ -31,7 +31,8 @@ import {
   FileSpreadsheet,
   FileCode,
   FileText,
-  Layers
+  Layers,
+  RotateCcw
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
@@ -673,6 +674,14 @@ export default function App() {
           >
             <Settings size={14} /> <span className="hidden md:inline">Manage Varsities</span>
           </button>
+
+          <button 
+            onClick={() => setShowResetConfirm(true)}
+            className="p-1.5 md:p-2 flex items-center justify-center rounded-md text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all active:scale-90"
+            title="Reset/Clear List"
+          >
+            <RotateCcw size={16} strokeWidth={2.5} />
+          </button>
         </div>
       </header>
 
@@ -762,7 +771,6 @@ export default function App() {
           </div>
           <span>Updated: {lastSaved}</span>
         </div>
-        <button onClick={() => setShowResetConfirm(true)} className="text-red-300 hover:text-red-500 transition-colors">Reset List</button>
       </footer>
 
       {/* Reset Confirmation Overlay */}

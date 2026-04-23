@@ -9,7 +9,7 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
   {
     id: 'iu',
     shortName: 'IU',
-    fullName: 'Islamic University Kushtia',
+    fullName: 'Islamic University',
     subjects: [
       { id: 'acce', name: 'Applied Chemistry & Chemical Engineering', lastPos: 1340 },
       { id: 'eee', name: 'Electrical & Electronic Engineering', lastPos: 2158 },
@@ -92,7 +92,7 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
     subjects: [
       { id: 'bangla', name: 'Bangla', lastPos: 12044 },
       { id: 'english', name: 'English', lastPos: 11396 },
-      { id: 'music', name: 'Music', lastPos: 28000 },
+      { id: 'music', name: 'Music', lastPos: null },
       { id: 'phil', name: 'Philosophy', lastPos: 12308 },
       { id: 'history', name: 'History', lastPos: 12246 },
       { id: 'cse', name: 'Computer Science & Engineering', lastPos: 3172 },
@@ -103,7 +103,7 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
       { id: 'pags', name: 'Public Administration & Governance Studies', lastPos: 9646 },
       { id: 'folklore', name: 'Folklore', lastPos: 14513 },
       { id: 'anthro', name: 'Anthropology', lastPos: null },
-      { id: 'pop', name: 'Population Science', lastPos: 3500 },
+      { id: 'pop', name: 'Population Science', lastPos: null },
       { id: 'lgdu', name: 'Local Government & Urban Development', lastPos: 11990 },
       { id: 'soc', name: 'Sociology', lastPos: 11620 },
       { id: 'ais', name: 'Accounting & Information Systems', lastPos: 9747 },
@@ -177,16 +177,16 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
       { id: 'dsm', name: 'Disaster Science & Management', lastPos: 11844 },
       { id: 'mcj', name: 'Mass Communication & Journalism', lastPos: 12590 },
       { id: 'gds', name: 'Gender & Development Studies', lastPos: 12946 },
-      { id: 'soc', name: 'Sociology', lastPos: 2134 },
+      { id: 'soc', name: 'Sociology', lastPos: null },
       { id: 'mis', name: 'Management Information Systems', lastPos: 10782 },
-      { id: 'mkt', name: 'Marketing', lastPos: 2718 },
-      { id: 'finance', name: 'Finance & Banking', lastPos: 1972 },
-      { id: 'mgt_studies', name: 'Management Studies', lastPos: 2519 },
-      { id: 'bangla', name: 'Bangla', lastPos: 3210 },
+      { id: 'mkt', name: 'Marketing', lastPos: null },
+      { id: 'finance', name: 'Finance & Banking', lastPos: null },
+      { id: 'mgt_studies', name: 'Management Studies', lastPos: null },
+      { id: 'bangla', name: 'Bangla', lastPos: null },
       { id: 'english', name: 'English', lastPos: 10847 },
       { id: 'history', name: 'History', lastPos: 11561 },
-      { id: 'ps', name: 'Political Science', lastPos: 1555 },
-      { id: 'pub_ad', name: 'Public Administration', lastPos: 2808 },
+      { id: 'ps', name: 'Political Science', lastPos: null },
+      { id: 'pub_ad', name: 'Public Administration', lastPos: null },
       { id: 'geo', name: 'Geography', lastPos: 10850 },
     ]
   },
@@ -274,12 +274,13 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
   },
   {
     id: 'nu',
-    shortName: 'NU',
+    shortName: 'NEU',
     fullName: 'Netrokona University, Netrokona',
     subjects: [
-      { id: 'cse', name: 'Computer Science & Engineering', lastPos: 4920 },
-      { id: 'english', name: 'English', lastPos: 13200 },
-      { id: 'eco', name: 'Economics', lastPos: 11200 },
+      { id: 'cse', name: 'Computer Science & Engineering', lastPos: 11984 },
+      { id: 'english', name: 'English', lastPos: 11853 },
+      { id: 'eco', name: 'Economics', lastPos: 13200 },
+      { id: 'ban', name: 'Bangla', lastPos: 13000 },
     ]
   },
   {
@@ -312,12 +313,34 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
     ]
   },
   {
+    id: 'pstu',
+    shortName: 'PSTU',
+    fullName: 'Pirojpur Science & Technology University',
+    subjects: [
+      { id: 'cse', name: 'Computer Science & Engineering', lastPos: 12871 },
+      { id: 'math', name: 'Mathematics', lastPos: 14651 },
+      { id: 'psychology', name: 'Psychology', lastPos: 15562 },
+      { id: 'stats', name: 'Statistics', lastPos: 14776 },
+    ]
+  },
+  {
     id: 'naogaon_u',
-    shortName: 'NU',
+    shortName: 'NAU',
     fullName: 'Naogaon university, Naogaon',
     subjects: [
-      { id: 'cse', name: 'Computer Science & Engineering', lastPos: 11000 },
-      { id: 'math', name: 'Mathematics', lastPos: 14500 },
+      { id: 'law', name: 'Law', lastPos: null },
+      { id: 'acc', name: 'Accounting', lastPos: null },
+    ]
+  },
+   {
+    id: 'rub',
+    shortName: 'RUB',
+    fullName: 'Rabindra university',
+    subjects: [
+      { id: 'ban', name: 'Bangla', lastPos: null },
+      { id: 'eco', name: 'Economics', lastPos: null },
+      { id: 'soc', name: 'Sociology', lastPos: null },
+      { id: 'man', name: 'Management', lastPos: null },
     ]
   }
 ];
