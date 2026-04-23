@@ -313,8 +313,8 @@ export const INITIAL_UNIVERSITIES: UniversityInfo[] = [
     ]
   },
   {
-    id: 'pstu',
-    shortName: 'PSTU',
+    id: 'prstu',
+    shortName: 'PrSTU',
     fullName: 'Pirojpur Science & Technology University',
     subjects: [
       { id: 'cse', name: 'Computer Science & Engineering', lastPos: 12871 },

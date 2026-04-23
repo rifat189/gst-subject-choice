@@ -23,7 +23,6 @@ import {
   PlusCircle,
   AlertTriangle,
   GraduationCap,
-  Image as ImageIcon,
   Save,
   ChevronRight,
   Search,
@@ -308,8 +307,18 @@ export default function App() {
 
     const savedUnis = localStorage.getItem('gst_universities_data');
     if (savedUnis) {
-      localStorage.removeItem('gst_universities_data');
+      try {
+        const parsed = JSON.parse(savedUnis);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setUniversities(parsed);
+          setSelectedUniId(parsed[0].id);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to load universities", e);
+      }
     }
+    
     setUniversities(INITIAL_UNIVERSITIES);
     setSelectedUniId(INITIAL_UNIVERSITIES[0].id);
   }, []);
@@ -948,11 +957,36 @@ export default function App() {
                             }}
                             className="px-4 py-3 cursor-pointer flex items-center justify-between"
                           >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                              <span className="text-[9px] font-black bg-slate-900 text-white w-14 py-0.5 rounded shrink-0 text-center">{uni.shortName}</span>
-                              <span className={`text-[11px] font-bold truncate ${selectedUniId === uni.id ? 'text-emerald-700' : 'text-slate-700'}`}>{uni.fullName}</span>
+                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                              {editingUniId === uni.id ? (
+                                <div className="flex gap-1 w-full" onClick={(e) => e.stopPropagation()}>
+                                  <input 
+                                    className="w-12 bg-slate-50 border border-emerald-200 rounded px-1 py-1 text-[9px] font-black uppercase outline-none" 
+                                    value={uni.shortName} 
+                                    onChange={(e) => updateUniversity(uni.id, { shortName: e.target.value })} 
+                                    autoFocus 
+                                  />
+                                  <input 
+                                    className="flex-1 bg-slate-50 border border-emerald-200 rounded px-1 py-1 text-[9px] font-bold outline-none" 
+                                    value={uni.fullName} 
+                                    onChange={(e) => updateUniversity(uni.id, { fullName: e.target.value })} 
+                                  />
+                                  <button 
+                                    onClick={() => setEditingUniId(null)} 
+                                    className="p-1 bg-emerald-600 text-white rounded"
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-[9px] font-black bg-slate-900 text-white w-14 py-0.5 rounded shrink-0 text-center">{uni.shortName}</span>
+                                  <span className={`text-[11px] font-bold truncate ${selectedUniId === uni.id ? 'text-emerald-700' : 'text-slate-700'}`}>{uni.fullName}</span>
+                                </>
+                              )}
                             </div>
-                            <ChevronRight size={14} className={`text-slate-300 transition-transform ${selectedUniId === uni.id ? 'translate-x-1 text-emerald-400' : ''}`} />
+                            <ChevronRight size={14} className={`hidden md:block text-slate-300 transition-transform ${selectedUniId === uni.id ? 'translate-x-1 text-emerald-400' : ''}`} />
+                            <ChevronDown size={14} className={`md:hidden text-slate-300 transition-transform ${mobileExpandedUniId === uni.id ? 'rotate-180 text-emerald-400' : ''}`} />
                           </div>
 
                           {/* Mobile Accordion Content */}
@@ -972,15 +1006,38 @@ export default function App() {
                                 {/* Inline Subject List for Mobile */}
                                 <div className="space-y-2">
                                   {uni.subjects.map(sub => (
-                                    <div key={sub.id} className="bg-white rounded p-2 flex items-center justify-between shadow-xs border border-emerald-50">
-                                      <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-800">{sub.name}</span>
-                                        <span className="text-[9px] text-slate-400">Rank: <b className="text-emerald-500">{sub.lastPos}</b></span>
-                                      </div>
-                                      <div className="flex gap-1">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingSubId({uniId: uni.id, subId: sub.id}); }} className="p-1 text-slate-400"><Edit2 size={12} /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); deleteSubjectInUni(uni.id, sub.id); }} className="p-1 text-red-300"><Trash2 size={12} /></button>
-                                      </div>
+                                    <div key={sub.id} className="bg-white rounded p-2 flex flex-col gap-2 shadow-xs border border-emerald-50">
+                                      {editingSubId?.uniId === uni.id && editingSubId?.subId === sub.id ? (
+                                        <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+                                          <input 
+                                            className="w-full bg-slate-50 border border-emerald-100 rounded px-2 py-1 text-[10px] font-bold outline-none" 
+                                            value={sub.name} 
+                                            onChange={(e) => updateSubjectInUni(uni.id, sub.id, { name: e.target.value })} 
+                                          />
+                                          <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-[9px] font-black uppercase text-slate-400">Rank:</span>
+                                              <input 
+                                                className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-[10px] font-mono font-bold text-emerald-600" 
+                                                value={sub.lastPos} 
+                                                onChange={(e) => updateSubjectInUni(uni.id, sub.id, { lastPos: e.target.value })} 
+                                              />
+                                            </div>
+                                            <button onClick={() => setEditingSubId(null)} className="p-1.5 bg-emerald-600 text-white rounded"><Check size={12} /></button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold text-slate-800">{sub.name}</span>
+                                            <span className="text-[9px] text-slate-400">Rank: <b className="text-emerald-500">{sub.lastPos}</b></span>
+                                          </div>
+                                          <div className="flex gap-1">
+                                            <button onClick={(e) => { e.stopPropagation(); setEditingSubId({uniId: uni.id, subId: sub.id}); }} className="p-1 text-slate-400"><Edit2 size={12} /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); deleteSubjectInUni(uni.id, sub.id); }} className="p-1 text-red-300"><Trash2 size={12} /></button>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                   {uni.subjects.length === 0 && <p className="text-[10px] italic text-slate-400 text-center py-2">No subjects added</p>}
