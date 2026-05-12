@@ -470,94 +470,162 @@ export default function App() {
   };
 
   const performCopyTable = async () => {
-    // Only export valid rows (must have university and subject)
-    const validChoices = choices.filter(c => c.universityId && c.subjectId);
-    if (validChoices.length === 0) return;
-    
-    // Prepare rows
-    const rows: string[][] = [];
-    validChoices.forEach((item, index) => {
-      const uni = universities.find(u => u.id === item.universityId);
-      const sub = uni?.subjects.find(s => s.id === item.subjectId);
+    try {
+      // Only export valid rows (must have university and subject) - actually let's export all choices that have at least some data
+      const exportableChoices = choices.filter(c => c.universityId || c.subjectId || c.note);
       
-      const rowData: string[] = [];
-      if (selectedColumns.includes('SL')) rowData.push((index + 1).toString());
-      if (selectedColumns.includes('University')) rowData.push(uni ? (uni.shortName || uni.fullName) : '');
-      if (selectedColumns.includes('Subject')) rowData.push(sub ? sub.name : '');
-      if (selectedColumns.includes('Last Rank')) rowData.push(sub ? sub.lastPos.toString() : '-');
-      if (selectedColumns.includes('Note')) rowData.push(item.note.replace(/\n/g, ' '));
+      if (exportableChoices.length === 0) {
+        alert("No data to copy. Please add some choices first.");
+        return;
+      }
       
-      rows.push(rowData);
-    });
-
-    let content = "";
-    if (copyFormat === 'TSV') {
-      content = selectedColumns.join('\t') + '\n';
-      content += rows.map(r => r.join('\t')).join('\n');
-    } else {
-      // ASCII Table logic - Strict requirements
-      // Max Width: 48 (safe under 50)
-      // Borders use: +, -, |
-      const N = selectedColumns.length;
-      const borderCharsCount = 3 * N + 1; // | cell | cell | -> 3 chars per cell + 1 ending |
-      const totalAvailableWidth = 47 - borderCharsCount; 
-      
-      // Assign tentative max widths based on column importance
-      const maxColWidths = selectedColumns.map(col => {
-        if (col === 'SL') return 3;
-        if (col === 'Last Rank') return 5;
-        if (col === 'University') return 10;
-        if (col === 'Subject') return 12;
-        if (col === 'Note') return 10;
-        return 8;
+      // Prepare rows based on selectedColumns order
+      const rows: string[][] = [];
+      exportableChoices.forEach((item, index) => {
+        const uni = universities.find(u => u.id === item.universityId);
+        const sub = uni?.subjects.find(s => s.id === item.subjectId);
+        
+        const rowData = selectedColumns.map(col => {
+          if (col === 'SL') return String(index + 1);
+          if (col === 'University') return uni ? (uni.shortName || uni.fullName || '') : '';
+          if (col === 'Subject') return sub ? (sub.name || '') : '';
+          if (col === 'Last Rank') return sub ? String(sub.lastPos ?? '-') : '-';
+          if (col === 'Note') return (item.note || '').replace(/\n/g, ' ');
+          return '';
+        });
+        
+        rows.push(rowData);
       });
 
-      // Distribute remaining width if any
-      const currentTotal = maxColWidths.reduce((a, b) => a + b, 0);
-      const diff = totalAvailableWidth - currentTotal;
-      if (diff > 0 && selectedColumns.includes('Subject')) {
-        const subIndex = selectedColumns.indexOf('Subject');
-        maxColWidths[subIndex] += diff;
+      let content = "";
+      if (copyFormat === 'TSV') {
+        content = selectedColumns.join('\t') + '\n';
+        content += rows.map(r => r.join('\t')).join('\n');
+      } else {
+        // ASCII Table logic - Strict requirements
+        const N = selectedColumns.length;
+        const borderCharsCount = 3 * N + 1;
+        const totalAvailableWidth = 47 - borderCharsCount; 
+        
+        const maxColWidths = selectedColumns.map(col => {
+          if (col === 'SL') return 3;
+          if (col === 'Last Rank') return 5;
+          if (col === 'University') return 10;
+          if (col === 'Subject') return 12;
+          if (col === 'Note') return 10;
+          return 8;
+        });
+
+        const currentTotal = maxColWidths.reduce((a, b) => a + b, 0);
+        const diff = totalAvailableWidth - currentTotal;
+        if (diff > 0 && selectedColumns.includes('Subject')) {
+          const subIndex = selectedColumns.indexOf('Subject');
+          maxColWidths[subIndex] += diff;
+        }
+
+        const truncate = (val: string, max: number) => {
+          const s = (val || "").toString();
+          if (s.length <= max) return s;
+          return s.substring(0, max - 1) + '.';
+        };
+
+        const truncatedRows = rows.map(row => 
+          row.map((cell, i) => truncate(cell, maxColWidths[i]))
+        );
+        const truncatedHeaders = selectedColumns.map((col, i) => truncate(col, maxColWidths[i]));
+
+        const colWidths = truncatedHeaders.map((col, i) => 
+          Math.max(col.length, ...truncatedRows.map(row => row[i]?.length || 0))
+        );
+
+        const createDivider = () => '+' + colWidths.map(w => '-'.repeat(w + 2)).join('+') + '+';
+        const formatRow = (r: string[]) => '| ' + r.map((cell, i) => String(cell || "").padEnd(colWidths[i])).join(' | ') + ' |';
+        
+        let table = "```\n";
+        table += createDivider() + '\n';
+        table += formatRow(truncatedHeaders) + '\n';
+        table += createDivider() + '\n';
+        truncatedRows.forEach(row => {
+          table += formatRow(row) + '\n';
+        });
+        table += createDivider() + '\n';
+        table += "```";
+        content = table;
       }
 
-      const truncate = (val: string, max: number) => {
-        const s = val.toString();
-        if (s.length <= max) return s;
-        return s.substring(0, max - 1) + '.'; // dots are standard ASCII
+      // Robust Copy Fallback
+      let success = false;
+
+      const tryBrowserCopy = async () => {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(content);
+            return true;
+          }
+        } catch (err) {
+          console.warn('Navigator clipboard failed', err);
+        }
+        return false;
       };
 
-      const truncatedRows = rows.map(row => 
-        row.map((cell, i) => truncate(cell, maxColWidths[i]))
-      );
-      const truncatedHeaders = selectedColumns.map((col, i) => truncate(col, maxColWidths[i]));
+      const tryFallbackCopy = () => {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = content;
+          
+          // Ensure it's not hidden in a way that prevents selection
+          textArea.style.fontSize = '12pt';
+          textArea.style.position = 'fixed';
+          textArea.style.left = '-10000px';
+          textArea.style.top = (window.pageYOffset || document.documentElement.scrollTop) + 'px';
+          textArea.setAttribute('readonly', '');
+          
+          document.body.appendChild(textArea);
+          
+          // Selection logic for multiple platforms
+          const isIOS = navigator.userAgent.match(/ipad|iphone/i);
+          if (isIOS) {
+            const range = document.createRange();
+            range.selectNodeContents(textArea);
+            const selection = window.getSelection();
+            if (selection) {
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+            textArea.setSelectionRange(0, 999999);
+          } else {
+            textArea.focus();
+            textArea.select();
+          }
+          
+          const result = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          return result;
+        } catch (err) {
+          console.error('Fallback copy failed', err);
+          return false;
+        }
+      };
 
-      const colWidths = truncatedHeaders.map((col, i) => 
-        Math.max(col.length, ...truncatedRows.map(row => row[i]?.length || 0))
-      );
+      success = await tryBrowserCopy();
+      if (!success) {
+        success = tryFallbackCopy();
+      }
 
-      const createDivider = () => '+' + colWidths.map(w => '-'.repeat(w + 2)).join('+') + '+';
-      const formatRow = (r: string[]) => '| ' + r.map((cell, i) => cell.toString().padEnd(colWidths[i])).join(' | ') + ' |';
-      
-      let table = "```\n";
-      table += createDivider() + '\n';
-      table += formatRow(truncatedHeaders) + '\n';
-      table += createDivider() + '\n';
-      truncatedRows.forEach(row => {
-        table += formatRow(row) + '\n';
-      });
-      table += createDivider() + '\n';
-      table += "```";
-      content = table;
-    }
-
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setShowCopyModal(false);
-      setShowDownloadMenu(false);
-      setTimeout(() => setCopied(false), 2000);
+      if (success) {
+        setCopied(true);
+        // Small delay before closing UI to let user see the success state
+        setTimeout(() => {
+          setShowCopyModal(false);
+          setShowDownloadMenu(false);
+          setCopied(false);
+        }, 1000);
+      } else {
+        alert("Clipboard access denied. Please manually select and copy the text.");
+      }
     } catch (err) {
-      console.error('Failed to copy: ', err);
+      console.error('CRITICAL: performCopyTable failed', err);
+      alert("An unexpected error occurred while preparing the table.");
     }
   };
 
@@ -1326,10 +1394,20 @@ export default function App() {
 
               <button 
                 onClick={performCopyTable}
-                disabled={selectedColumns.length === 0}
-                className="w-full py-3 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-[0.1em] hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-100 transition-all flex items-center justify-center gap-2"
+                disabled={selectedColumns.length === 0 || copied}
+                className={`w-full py-3 ${copied ? 'bg-slate-900 shadow-emerald-900/20' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100'} text-white rounded-xl text-xs font-black uppercase tracking-[0.1em] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all flex items-center justify-center gap-2`}
               >
-                <ClipboardCheck size={16} /> Copy Table
+                {copied ? (
+                  <>
+                    <Check size={16} className="text-emerald-400" strokeWidth={3} />
+                    <span>Table Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <ClipboardCheck size={16} />
+                    <span>Copy Table</span>
+                  </>
+                )}
               </button>
             </motion.div>
           </motion.div>
